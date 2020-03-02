@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <RootNamespace>img_scraper</RootNamespace>
+    <StartupObject>img_scraper.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EPPlus" Version="4.5.3.3" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.21" />
+    <PackageReference Include="System.IO.FileSystem.AccessControl" Version="4.7.0" />
+  </ItemGroup>
+
+</Project>
