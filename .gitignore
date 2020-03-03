@@ -339,3 +339,4 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 /img-scraper/img-scraper.exe
+/img-scraper/images/

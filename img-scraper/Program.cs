@@ -55,7 +55,10 @@ namespace img_scraper
                             new string[] {"Lp", "Url", "File Name", "Size(kB)", "Alt" }
                         };
 
-                        List<HtmlNode> nodes = new List<HtmlNode> { LoadHtmlDocument(uriResult) };
+                        HtmlNode html = LoadHtmlDocument(uriResult);
+                        List<HtmlNode> nodes = new List<HtmlNode>();
+                        if (html != null)
+                            nodes.Add(html);
                         List<HtmlNode> imgNodes = new List<HtmlNode>();
 
                         List<string> fileNames = new List<string>();
@@ -157,9 +160,16 @@ namespace img_scraper
         {
             var doc = new HtmlDocument();
             var wc = new WebClient();
-            doc.LoadHtml(wc.DownloadString(uri));
-
-            var documentNode = doc.DocumentNode;
+            HtmlNode documentNode = null;
+            try
+            {
+                doc.LoadHtml(wc.DownloadString(uri));
+                documentNode = doc.DocumentNode;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
             return documentNode;
         }
 
@@ -178,3 +188,4 @@ namespace img_scraper
         }
     }
 }
+
