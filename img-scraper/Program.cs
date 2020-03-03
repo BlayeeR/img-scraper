@@ -58,7 +58,7 @@ namespace img_scraper
                         var worksheet = excel.Workbook.Worksheets["Images"];
                         List<string[]> rows = new List<string[]>()
                         {
-                            new string[] {"Lp", "Uri", "File Name", "Size(kB)", "Alt" }
+                            new string[] {"Lp", "Url", "File Name", "Size(kB)", "Alt" }
                         };
 
                         List<HtmlNode> nodes = new List<HtmlNode> { LoadHtmlDocument(uriResult) };
@@ -68,11 +68,20 @@ namespace img_scraper
                         nodes.ForEach(t =>
                             {
                                 string[] row = new string[5];
+                                //Console.WriteLine(t.OuterHtml);
                                 foreach (string ext in exts)
                                 {
-                                    if (t.Attributes["src"].Value.Contains(ext))
+                                    string imgUrl = "";
+                                    if (t.Attributes["src"] != null && t.Attributes["src"].Value.Contains(ext))
                                     {
-                                        string imgUrl = t.Attributes["src"].Value.Substring(0, t.Attributes["src"].Value.LastIndexOf(ext) + ext.Length);
+                                        imgUrl = t.Attributes["src"].Value.Substring(0, t.Attributes["src"].Value.LastIndexOf(ext) + ext.Length);
+                                    }
+                                    else if (t.Attributes["data-src-pc"] != null && t.Attributes["data-src-pc"].Value.Contains(ext))
+                                    {
+                                        imgUrl = t.Attributes["data-src-pc"].Value.Substring(0, t.Attributes["data-src-pc"].Value.LastIndexOf(ext) + ext.Length);
+                                    }
+                                    if (imgUrl != "")
+                                    {
                                         Uri uriImg;
                                         if (!(Uri.TryCreate(imgUrl, UriKind.Absolute, out uriImg) && (uriImg.Scheme == Uri.UriSchemeHttp || uriImg.Scheme == Uri.UriSchemeHttps)))
                                         {
@@ -84,9 +93,15 @@ namespace img_scraper
                                         }
                                         Console.WriteLine(uriImg.ToString());
                                         row[0] = i.ToString();
-                                        row[1] = uriImg.ToString().Substring(0, uriImg.ToString().LastIndexOf("/"));
+                                        row[1] = uriImg.ToString();
                                         row[2] = uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/") + 1);
+                                        row[4] = t.Attributes["alt"].Value;
                                         DownloadImage(subFolder, uriImg, new WebClient());
+                                        string filePath = subFolder + uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/"));
+                                        if (File.Exists(filePath))
+                                        {
+                                            row[3] = (new FileInfo(filePath).Length / 1024f).ToString("N2");
+                                        }
                                         rows.Add(row);
                                         i++;
                                     }
@@ -95,8 +110,16 @@ namespace img_scraper
 
                         string headerRange = "A1:" + Char.ConvertFromUtf32(rows[0].Length + 64) + "1";
                         worksheet.Cells[headerRange].LoadFromArrays(rows);
+                        worksheet.Cells[$"A1:{'A'+ i}{i}"].AutoFitColumns();
 
-                        excel.SaveAs(new FileInfo(subFolder + "images.xlsx"));
+                        try
+                        {
+                            excel.SaveAs(new FileInfo(subFolder + "images.xlsx"));
+                        }
+                        catch
+                        {
+                            Console.WriteLine("Nie można nadpisać pliku xlsx, prawdopodobnie jest używany przez inny proces");
+                        }
                     }
                 }
                 else
