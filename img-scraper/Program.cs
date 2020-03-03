@@ -57,58 +57,79 @@ namespace img_scraper
 
                         List<HtmlNode> nodes = new List<HtmlNode> { LoadHtmlDocument(uriResult) };
                         List<HtmlNode> imgNodes = new List<HtmlNode>();
+
                         List<string> fileNames = new List<string>();
-                        imgNodes.AddRange(nodes.SelectMany(p => p.SelectNodes("//img")));
-                        imgNodes.AddRange(nodes.SelectMany(p => p.SelectNodes("//picture//source")));
-                        int i = 1;
+                        imgNodes.AddRange(nodes.SelectMany(p => p.SelectNodes(".//img") ?? new HtmlNodeCollection(null)));
+                        imgNodes.AddRange(nodes.SelectMany(p => p.SelectNodes(".//picture//source")?? new HtmlNodeCollection(null)));
+                        int i = 1, duplicates = 0;
                         Console.WriteLine($"Liczba obrazków na stronie: {imgNodes.Count}");
-                        imgNodes.AsParallel().ForAll(t =>
+                        imgNodes.ForEach(t =>
                             {
-                                string[] row = new string[5];
-                                foreach (string ext in exts)
+                            string[] row = new string[5];
+                            foreach (string ext in exts)
+                            {
+                                string imgUrl = "";
+                                if (t.Attributes["src"] != null && t.Attributes["src"].Value.Contains(ext))
                                 {
-                                    string imgUrl = "";
-                                    if (t.Attributes["src"] != null && t.Attributes["src"].Value.Contains(ext))
+                                    imgUrl = t.Attributes["src"].Value.Substring(0, t.Attributes["src"].Value.LastIndexOf(ext) + ext.Length);
+                                }
+                                else if (t.Attributes["data-src-pc"] != null && t.Attributes["data-src-pc"].Value.Contains(ext))
+                                {
+                                    imgUrl = t.Attributes["data-src-pc"].Value.Substring(0, t.Attributes["data-src-pc"].Value.LastIndexOf(ext) + ext.Length);
+                                }
+                                else if (t.Attributes["srcset"] != null && t.Attributes["srcset"].Value.Contains(ext))
+                                {
+                                    imgUrl = t.Attributes["srcset"].Value.Substring(0, t.Attributes["srcset"].Value.LastIndexOf(ext) + ext.Length);
+                                }
+                                if (imgUrl != "")
+                                {
+                                    Uri uriImg;
+                                    if (!(Uri.TryCreate(imgUrl, UriKind.Absolute, out uriImg) && (uriImg.Scheme == Uri.UriSchemeHttp || uriImg.Scheme == Uri.UriSchemeHttps)))
                                     {
-                                        imgUrl = t.Attributes["src"].Value.Substring(0, t.Attributes["src"].Value.LastIndexOf(ext) + ext.Length);
-                                    }
-                                    else if (t.Attributes["data-src-pc"] != null && t.Attributes["data-src-pc"].Value.Contains(ext))
-                                    {
-                                        imgUrl = t.Attributes["data-src-pc"].Value.Substring(0, t.Attributes["data-src-pc"].Value.LastIndexOf(ext) + ext.Length);
-                                    }
-                                    else if (t.Attributes["srcset"] != null && t.Attributes["srcset"].Value.Contains(ext))
-                                    {
-                                        imgUrl = t.Attributes["srcset"].Value.Substring(0, t.Attributes["srcset"].Value.LastIndexOf(ext) + ext.Length);
-                                    }
-                                    if (imgUrl != "")
-                                    {
-                                        Uri uriImg;
-                                        if (!(Uri.TryCreate(imgUrl, UriKind.Absolute, out uriImg) && (uriImg.Scheme == Uri.UriSchemeHttp || uriImg.Scheme == Uri.UriSchemeHttps)))
+                                        if (imgUrl.StartsWith("//"))
+                                            imgUrl = "https:" + imgUrl;
+                                        else if (imgUrl.StartsWith("/"))
+                                            imgUrl = "https:/" + imgUrl;
+                                        else
+                                            imgUrl = "https://" + imgUrl;
+                                        try
                                         {
-                                            if (imgUrl.StartsWith("//"))
-                                                imgUrl = "https:" + imgUrl;
-                                            else
-                                                imgUrl = "https://" + imgUrl;
                                             uriImg = new Uri(imgUrl);
                                         }
-                                        row[0] = i.ToString();
-                                        row[1] = uriImg.ToString();
-                                        row[2] = uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/") + 1);
-                                        row[4] = t.Attributes["alt"]!=null?t.Attributes["alt"].Value:"";
-                                        DownloadImage(subFolder, uriImg, new WebClient());
-                                        string filePath = subFolder + uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/"));
-                                        if (File.Exists(filePath))
+                                        catch (Exception e)
                                         {
-                                            FileInfo fi = new FileInfo(filePath);
-                                            row[3] = Math.Round(fi.Length / 1024f).ToString();
-                                            Console.WriteLine($"Saving as {fi.FullName}");
-                                            fileNames.Add(fi.Name);
+                                            Console.WriteLine(e.Message);
+                                            continue;
                                         }
-                                        rows.Add(row);
-                                        i++;
                                     }
+
+                                    row[0] = i.ToString();
+                                    row[1] = uriImg.ToString();
+                                    row[2] = uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/") + 1);
+                                    row[4] = t.Attributes["alt"] != null ? t.Attributes["alt"].Value : "";
+
+                                    if(fileNames.Contains(row[2]))
+                                    {
+                                        duplicates++;
+                                        continue;
+                                    }
+
+                                    if (!DownloadImage(subFolder, uriImg, new WebClient()))
+                                        continue;
+
+                                    string filePath = subFolder + uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/"));
+                                    if (File.Exists(filePath))
+                                    {
+                                        FileInfo fi = new FileInfo(filePath);
+                                        row[3] = Math.Round(fi.Length / 1024f).ToString();
+                                        Console.WriteLine($"Saving as {fi.FullName}");
+                                        fileNames.Add(fi.Name);
+                                    }
+                                    rows.Add(row);
+                                    i++;
                                 }
-                            });
+                            }
+                        });
 
                         string headerRange = "A1:" + Char.ConvertFromUtf32(rows[0].Length + 64) + "1";
                         worksheet.Cells[headerRange].LoadFromArrays(rows);
@@ -117,11 +138,9 @@ namespace img_scraper
                         try
                         {
                             excel.SaveAs(new FileInfo(subFolder + "images.xlsx"));
-                            int duplicates = fileNames.GroupBy(x => x)
-                                            .Select(g => new { Value = g.Key, Count = g.Count() }).Where(g=>g.Count>1).Count();
                             Console.WriteLine($"\r\nZnaleziono obrazków: {imgNodes.Count}");
                             Console.WriteLine($"Duplikatów: {duplicates}");
-                            Console.WriteLine($"Pobrano: {i-duplicates-1}\r\n\r\nKoniec\r\n\r\nWklej kolejny adres strony");
+                            Console.WriteLine($"Pobrano: {i-1}\r\n\r\nKoniec\r\n\r\nWklej kolejny adres strony");
                         }
                         catch
                         {
@@ -144,16 +163,18 @@ namespace img_scraper
             return documentNode;
         }
 
-        private static void DownloadImage(string folderImagesPath, Uri url, WebClient webClient)
+        private static bool DownloadImage(string folderImagesPath, Uri url, WebClient webClient)
         {
             try
             {
                 webClient.DownloadFile(url, Path.Combine(folderImagesPath, Path.GetFileName(url.ToString())));
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(e.Message);
+                return false;
             }
+            return true;
         }
     }
 }
