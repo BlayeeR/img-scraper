@@ -28,6 +28,7 @@ namespace img_scraper
             catch (UnauthorizedAccessException)
             {
                 Console.WriteLine("Brak uprawnień\r\nUruchom jako administrator albo zmień lokalizację programu");
+                return;
             }
             
             while (!String.IsNullOrEmpty(url = Console.ReadLine()))
@@ -55,11 +56,13 @@ namespace img_scraper
                         };
 
                         List<HtmlNode> nodes = new List<HtmlNode> { LoadHtmlDocument(uriResult) };
+                        List<HtmlNode> imgNodes = new List<HtmlNode>();
                         List<string> fileNames = new List<string>();
-                        nodes = nodes.SelectMany(p => p.SelectNodes("//img")).ToList();
+                        imgNodes.AddRange(nodes.SelectMany(p => p.SelectNodes("//img")));
+                        imgNodes.AddRange(nodes.SelectMany(p => p.SelectNodes("//picture//source")));
                         int i = 1;
-                        Console.WriteLine($"Liczba obrazków na stronie: {nodes.Count}");
-                        nodes.ForEach(t =>
+                        Console.WriteLine($"Liczba obrazków na stronie: {imgNodes.Count}");
+                        imgNodes.AsParallel().ForAll(t =>
                             {
                                 string[] row = new string[5];
                                 foreach (string ext in exts)
@@ -72,6 +75,10 @@ namespace img_scraper
                                     else if (t.Attributes["data-src-pc"] != null && t.Attributes["data-src-pc"].Value.Contains(ext))
                                     {
                                         imgUrl = t.Attributes["data-src-pc"].Value.Substring(0, t.Attributes["data-src-pc"].Value.LastIndexOf(ext) + ext.Length);
+                                    }
+                                    else if (t.Attributes["srcset"] != null && t.Attributes["srcset"].Value.Contains(ext))
+                                    {
+                                        imgUrl = t.Attributes["srcset"].Value.Substring(0, t.Attributes["srcset"].Value.LastIndexOf(ext) + ext.Length);
                                     }
                                     if (imgUrl != "")
                                     {
@@ -87,13 +94,13 @@ namespace img_scraper
                                         row[0] = i.ToString();
                                         row[1] = uriImg.ToString();
                                         row[2] = uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/") + 1);
-                                        row[4] = t.Attributes["alt"].Value;
+                                        row[4] = t.Attributes["alt"]!=null?t.Attributes["alt"].Value:"";
                                         DownloadImage(subFolder, uriImg, new WebClient());
                                         string filePath = subFolder + uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/"));
                                         if (File.Exists(filePath))
                                         {
                                             FileInfo fi = new FileInfo(filePath);
-                                            row[3] = (fi.Length / 1024f).ToString("N2");
+                                            row[3] = Math.Round(fi.Length / 1024f).ToString();
                                             Console.WriteLine($"Saving as {fi.FullName}");
                                             fileNames.Add(fi.Name);
                                         }
@@ -110,11 +117,11 @@ namespace img_scraper
                         try
                         {
                             excel.SaveAs(new FileInfo(subFolder + "images.xlsx"));
-                            var q = fileNames.GroupBy(x => x)
-                                            .Select(g => new { Value = g.Key, Count = g.Count() });
-                            Console.WriteLine($"\r\nZnaleziono obrazków: {nodes.Count}");
-                            Console.WriteLine($"Duplikatów: {q.Where(x=>x.Count >1).Count()}");
-                            Console.WriteLine($"Pobrano: {i-2}\r\n\r\nKoniec\r\n\r\nWklej kolejny adres strony");
+                            int duplicates = fileNames.GroupBy(x => x)
+                                            .Select(g => new { Value = g.Key, Count = g.Count() }).Where(g=>g.Count>1).Count();
+                            Console.WriteLine($"\r\nZnaleziono obrazków: {imgNodes.Count}");
+                            Console.WriteLine($"Duplikatów: {duplicates}");
+                            Console.WriteLine($"Pobrano: {i-duplicates-1}\r\n\r\nKoniec\r\n\r\nWklej kolejny adres strony");
                         }
                         catch
                         {
