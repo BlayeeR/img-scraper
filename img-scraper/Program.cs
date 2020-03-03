@@ -16,7 +16,7 @@ namespace img_scraper
         static void Main(string[] args)
         {
             Console.WriteLine("Wklej adres strony:");
-            string url, folder = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName) + @"\images\";
+            string url, folder = Directory.GetCurrentDirectory()+ @"\images\";//Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName) + @"\images\";
             List<string> exts = new List<string>()
             {
                 ".jpg", ".png"
@@ -91,7 +91,7 @@ namespace img_scraper
                                                 imgUrl = "https://" + imgUrl;
                                             uriImg = new Uri(imgUrl);
                                         }
-                                        Console.WriteLine(uriImg.ToString());
+                                        //Console.WriteLine(uriImg.ToString());
                                         row[0] = i.ToString();
                                         row[1] = uriImg.ToString();
                                         row[2] = uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/") + 1);
@@ -100,7 +100,9 @@ namespace img_scraper
                                         string filePath = subFolder + uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/"));
                                         if (File.Exists(filePath))
                                         {
-                                            row[3] = (new FileInfo(filePath).Length / 1024f).ToString("N2");
+                                            FileInfo fi = new FileInfo(filePath);
+                                            row[3] = (fi.Length / 1024f).ToString("N2");
+                                            Console.WriteLine($"Saving as {fi.FullName}");
                                         }
                                         rows.Add(row);
                                         i++;
