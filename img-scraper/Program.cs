@@ -16,21 +16,14 @@ namespace img_scraper
         static void Main(string[] args)
         {
             Console.WriteLine("Wklej adres strony:");
-            string url, folder = Directory.GetCurrentDirectory()+ @"\images\";//Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName) + @"\images\";
+            string url, folder = Directory.GetCurrentDirectory()+ @"\images\";
             List<string> exts = new List<string>()
             {
                 ".jpg", ".png"
             };
             try
             {
-                if (Directory.Exists(folder) && !CheckFolderPermission(folder))
-                {
-                    throw new UnauthorizedAccessException();
-                }
-                else
-                {
-                    Directory.CreateDirectory(folder);
-                }
+                Directory.CreateDirectory(folder);
             }
             catch (UnauthorizedAccessException)
             {
@@ -62,13 +55,13 @@ namespace img_scraper
                         };
 
                         List<HtmlNode> nodes = new List<HtmlNode> { LoadHtmlDocument(uriResult) };
+                        List<string> fileNames = new List<string>();
                         nodes = nodes.SelectMany(p => p.SelectNodes("//img")).ToList();
                         int i = 1;
                         Console.WriteLine($"Liczba obrazków na stronie: {nodes.Count}");
                         nodes.ForEach(t =>
                             {
                                 string[] row = new string[5];
-                                //Console.WriteLine(t.OuterHtml);
                                 foreach (string ext in exts)
                                 {
                                     string imgUrl = "";
@@ -91,7 +84,6 @@ namespace img_scraper
                                                 imgUrl = "https://" + imgUrl;
                                             uriImg = new Uri(imgUrl);
                                         }
-                                        //Console.WriteLine(uriImg.ToString());
                                         row[0] = i.ToString();
                                         row[1] = uriImg.ToString();
                                         row[2] = uriImg.ToString().Substring(uriImg.ToString().LastIndexOf("/") + 1);
@@ -103,6 +95,7 @@ namespace img_scraper
                                             FileInfo fi = new FileInfo(filePath);
                                             row[3] = (fi.Length / 1024f).ToString("N2");
                                             Console.WriteLine($"Saving as {fi.FullName}");
+                                            fileNames.Add(fi.Name);
                                         }
                                         rows.Add(row);
                                         i++;
@@ -117,6 +110,11 @@ namespace img_scraper
                         try
                         {
                             excel.SaveAs(new FileInfo(subFolder + "images.xlsx"));
+                            var q = fileNames.GroupBy(x => x)
+                                            .Select(g => new { Value = g.Key, Count = g.Count() });
+                            Console.WriteLine($"\r\nZnaleziono obrazków: {nodes.Count}");
+                            Console.WriteLine($"Duplikatów: {q.Where(x=>x.Count >1).Count()}");
+                            Console.WriteLine($"Pobrano: {i-2}\r\n\r\nKoniec\r\n\r\nWklej kolejny adres strony");
                         }
                         catch
                         {
@@ -148,20 +146,6 @@ namespace img_scraper
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-            }
-        }
-
-        private static bool CheckFolderPermission(string folderPath)
-        {
-            DirectoryInfo dirInfo = new DirectoryInfo(folderPath);
-            try
-            {
-                DirectorySecurity dirAC = dirInfo.GetAccessControl(AccessControlSections.All);
-                return true;
-            }
-            catch (PrivilegeNotHeldException)
-            {
-                return false;
             }
         }
     }
