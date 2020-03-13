@@ -23,7 +23,7 @@ namespace img_scraper
             };
             List<string> attributes = new List<string>()
             {
-                "srcset", "data-src-pc", "src"
+                "data-media-s4", "srcset", "data-src-pc", "src"
             };
             try
             {
